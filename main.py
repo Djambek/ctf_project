@@ -2,9 +2,11 @@ import socket
 from threading import Thread 
 from db import *
 import random, string
+import os
+
 
 HOST = socket.gethostname()
-PORT = 5002
+PORT = 5001
 server_socket = socket.socket()  # get instance
 # look closely. The bind() function takes tuple as argument
 server_socket.bind((HOST, PORT))  # bind host address and port together
@@ -56,11 +58,30 @@ def all_notes(conn, token):
     print(get_files(token))
     els = get_files(token)
     data = "Ваши заметки:\r\n"
+    vars = [["q\n", main_page, conn, token]]
     for ind, el in enumerate(els):
         data += f"\t{ind+1})" + el[0]+"\r\n"
+        vars.append([f"{ind+1}\n", get_note_text, conn, el[1], el[2], token])
     data += "Введите номер заметки, чтобы ее посмотреть, если хотите назад, то введите q\r\nВвод: "
     conn.send(data.encode())
-    conn.close()
+    return check_user_input(conn, vars, "Неверный ввод, подумайте и введите снова\r\nВвод: ")
+
+def get_note_text(conn, path, id, token):
+    print_board(conn)
+    try:
+        file = open(path, 'r').read()
+        conn.send(file.encode())
+        conn.send("Введите 1, если хотите удалить, введите q, чтобы вернуться назад\r\nВвод: ".encode())
+        return check_user_input(conn, [['1\n', delete_note, conn, id, path, token], ['q\n', all_notes, conn, token]], "Неверный ввод, подумайте и введите снова\r\nВвод: ")
+    except:
+        conn.send("Произошла ошибка, такое тоже бывает)".encode())
+        conn.close()
+
+def delete_note(conn, id, path, token):
+    print("Id to delete: ", id)
+    delete_note_db(id)
+    os.remove(path)
+    return all_notes(conn, token)
 
 def view_note(conn, path):
     print_board(conn)

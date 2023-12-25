@@ -19,7 +19,7 @@ def get_files(token:str):
     ids = c.fetchall()
     for id in ids:
         id_value = id[0]
-        c.execute("SELECT header, path_to_file FROM files WHERE id_file = (?)", (id_value,))
+        c.execute("SELECT header, path_to_file, id_file FROM files WHERE id_file = (?)", (id_value,))
         data = c.fetchone()
         files.append(data)
     conn.commit()
@@ -33,6 +33,13 @@ def check_token(token: str) -> bool:
     d = c.fetchone()
     return d is not None and len(d) > 0 
 
+def delete_note_db(id_file):
+    conn = sqlite3.connect('database.db')
+    c = conn.cursor()
+    c.execute("DELETE FROM files WHERE id_file = (?)", (id_file,))
+    c.execute("DELETE FROM notes WHERE id_file = (?)", (id_file,))
+    conn.commit()
+    conn.close()
 
 c = conn.cursor()
 c.execute("""

@@ -1,0 +1,5 @@
+ctf_venv/
+notes/
+*.db
+__pycache__
+
