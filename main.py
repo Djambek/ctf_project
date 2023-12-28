@@ -3,16 +3,20 @@ from threading import Thread
 from db import *
 import random, string
 import os
-
+from hashlib import sha256
 
 HOST = socket.gethostname()
 PORT = 5001
+DIR = "notes/"
 server_socket = socket.socket()  # get instance
 # look closely. The bind() function takes tuple as argument
 server_socket.bind((HOST, PORT))  # bind host address and port together
 
 # configure how many client the server can listen simultaneously
 server_socket.listen(8)
+
+def hash(data):
+    return sha256(data.encode('utf-8')).hexdigest()
 
 def print_board(conn):
     conn.send("\r\n---------------------------------\r\n".encode())
@@ -59,11 +63,14 @@ def all_notes(conn, token):
     els = get_files(token)
     data = "Ваши заметки:\r\n"
     vars = [["q\n", main_page, conn, token]]
-    for ind, el in enumerate(els):
-        data += f"\t{ind+1})" + el[0]+"\r\n"
-        vars.append([f"{ind+1}\n", get_note_text, conn, el[1], el[2], token])
-    data += "Введите номер заметки, чтобы ее посмотреть, если хотите назад, то введите q\r\nВвод: "
-    conn.send(data.encode())
+    if len(els) == 0:
+        conn.send("У вас нет заметок! Чтобы вернуться назад нажмите q\r\nВвод: ".encode())
+    else:
+        for ind, el in enumerate(els):
+            data += f"\t{ind+1})" + el[0]+"\r\n"
+            vars.append([f"{ind+1}\n", get_note_text, conn, el[1], el[2], token])
+        data += "Введите номер заметки, чтобы ее посмотреть, если хотите назад, то введите q\r\nВвод: "
+        conn.send(data.encode())
     return check_user_input(conn, vars, "Неверный ввод, подумайте и введите снова\r\nВвод: ")
 
 def get_note_text(conn, path, id, token):
@@ -71,8 +78,8 @@ def get_note_text(conn, path, id, token):
     try:
         file = open(path, 'r').read()
         conn.send(file.encode())
-        conn.send("Введите 1, если хотите удалить, введите q, чтобы вернуться назад\r\nВвод: ".encode())
-        return check_user_input(conn, [['1\n', delete_note, conn, id, path, token], ['q\n', all_notes, conn, token]], "Неверный ввод, подумайте и введите снова\r\nВвод: ")
+        conn.send("Введите d, если хотите удалить, введите q, чтобы вернуться назад\r\nВвод: ".encode())
+        return check_user_input(conn, [['d\n', delete_note, conn, id, path, token], ['q\n', all_notes, conn, token]], "Неверный ввод, подумайте и введите снова\r\nВвод: ")
     except:
         conn.send("Произошла ошибка, такое тоже бывает)".encode())
         conn.close()
@@ -83,15 +90,31 @@ def delete_note(conn, id, path, token):
     os.remove(path)
     return all_notes(conn, token)
 
-def view_note(conn, path):
-    print_board(conn)
-    data = open(path, "r").read()
     
-    
+def recvall(sock):
+    BUFF_SIZE = 4096 # 4 KiB
+    data = b''
+    while True:
+        part = sock.recv(BUFF_SIZE)
+        data += part
+        if len(part) < BUFF_SIZE:
+            # either 0 or end of data
+            break
+    return data
+
 def create_new_note(conn, token):
     print_board(conn)
-    conn.send("Push your wish in your ass")
-    conn.close()
+    conn.send("Введите заголовок для заметки, нажмите enter, чтобы его ввести. Нельзя использовать символы переноса строки) Ввод: ".encode())
+    header = conn.recv(1024).decode().replace('\n', '')
+    conn.send("Введите текст для заметки, нажмите enter, чтобы его ввести.Нельзя использовать символы переноса строки)\nВвод: ".encode())
+    body = recvall(conn).decode()
+    path = f"{DIR + hash(header)}.txt"
+    with open(path,  'w') as f:
+        f.write(body)
+    create_new_file(header, path, token)
+    conn.send("Заметка сохранена".encode())
+    return main_page(conn, token)
+
 
 def generate_token(lenght):
     lett = string.ascii_lowercase + string.ascii_uppercase + "1234567890!@#$%^&*()"
